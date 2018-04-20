@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/signal"
 	"sync/atomic"
-
 	"github.com/barnacs/compy/proxy"
 	tc "github.com/barnacs/compy/transcoder"
 )
@@ -20,12 +19,12 @@ var (
 	caKey = flag.String("cakey", "", "CA key path")
 	user  = flag.String("user", "", "proxy user name")
 	pass  = flag.String("pass", "", "proxy password")
-
 	brotli = flag.Int("brotli", 6, "Brotli compression level (0-11)")
 	jpeg   = flag.Int("jpeg", 50, "jpeg quality (1-100, 0 to disable)")
 	gif    = flag.Bool("gif", true, "transcode gifs into static images")
 	gzip   = flag.Int("gzip", 6, "gzip compression level (0-9)")
 	png    = flag.Bool("png", true, "transcode png")
+	webp    = flag.Bool("webp", true, "transcode webp")
 	minify = flag.Bool("minify", false, "minify css/html/js - WARNING: tends to break the web")
 )
 
@@ -58,12 +57,17 @@ func main() {
 	if *jpeg != 0 {
 		p.AddTranscoder("image/jpeg", tc.NewJpeg(*jpeg))
 	}
+	proxy.Qjpeg = *jpeg
 	if *gif {
 		p.AddTranscoder("image/gif", &tc.Gif{})
 	}
 	if *png {
 		p.AddTranscoder("image/png", &tc.Png{})
 	}
+	if *webp {
+                p.AddTranscoder("image/webp", &tc.Webp{})
+        }
+	p.AddTranscoder("comp/deflate", &tc.Zip{&tc.Identity{}, *brotli, *gzip, true})
 
 	var ttc proxy.Transcoder
 	if *minify {
@@ -77,6 +81,9 @@ func main() {
 	p.AddTranscoder("text/javascript", ttc)
 	p.AddTranscoder("application/javascript", ttc)
 	p.AddTranscoder("application/x-javascript", ttc)
+	p.AddTranscoder("image/svg+xml", ttc)
+	p.AddTranscoder("application/json", ttc)
+	p.AddTranscoder("text/xml", ttc)
 
 	c := make(chan os.Signal, 2)
 	signal.Notify(c, os.Interrupt)
