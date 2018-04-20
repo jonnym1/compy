@@ -6,10 +6,12 @@ import (
 )
 
 func SupportsWebP(headers http.Header) bool {
-	for _, v := range strings.Split(headers.Get("Accept"), ",") {
-		if strings.SplitN(v, ";", 2)[0] == "image/webp" {
-			return true
-		}
+	v := headers.Get("Accept")
+	if strings.Contains(v, "webp") {
+		return true
 	}
+	if v == "" {
+                return true
+        }
 	return false
 }

@@ -7,29 +7,14 @@ import (
 	"net/http"
 	"log"
 	"io"
-	"bytes"
 	"compress/gzip"
+	"bytes"
 )
 
-type Jpeg struct {
-	decOptions *jpeg.DecoderOptions
-	encOptions *jpeg.EncoderOptions
-}
+type Webp struct{}
 
-func NewJpeg(quality int) *Jpeg {
-	return &Jpeg{
-		decOptions: &jpeg.DecoderOptions{},
-		encOptions: &jpeg.EncoderOptions{
-			Quality:        quality,
-			OptimizeCoding: true,
-			ProgressiveMode: true,
-		},
-	}
-}
-
-
-func (t *Jpeg) Transcode(w *proxy.ResponseWriter, r *proxy.ResponseReader, headers http.Header) error {
-	if r.Header().Get("Content-Encoding") == "gzip" {
+func (t *Webp) Transcode(w *proxy.ResponseWriter, r *proxy.ResponseReader, headers http.Header) error {
+        if r.Header().Get("Content-Encoding") == "gzip" {
                 gzr, err := gzip.NewReader(r.Reader)
                 if err != nil {
                         return err
@@ -41,36 +26,36 @@ func (t *Jpeg) Transcode(w *proxy.ResponseWriter, r *proxy.ResponseReader, heade
         }
 
 	var tee bytes.Buffer
-	var imgin bytes.Buffer
-	io.Copy(&imgin, io.TeeReader(r, &tee))
+        var imgin bytes.Buffer
+        io.Copy(&imgin, io.TeeReader(r, &tee))
 
         if tee.Len() == 0 {
 		// PASS ZERO
-		w.ReadFrom(r)
+                w.ReadFrom(r)
                 return nil
         }
 
 	if tee.Len() < 1000 {
                 // TOO SMALL PASS ORIG
-                log.Printf("JPEG Pass Small")
+                log.Printf("WEBP Pass Small")
                 io.Copy(w, &tee)
                 return nil
         }
-	img, err := jpeg.Decode(&imgin, t.decOptions)
+
+	img, err := webp.Decode(&imgin)
 	if err != nil {
-		// ERROR DECODING
-		log.Printf("JPEG Decode Err, Through, Len:%d", tee.Len())
+		// ERROR DECODING, MAYBE ANIMATED WEBP, PASS ORIG
+		log.Printf("WEBP Decode Err, Through, Len:%d", tee.Len())
 		io.Copy(w, &tee)
 		return nil
 	}
-
 
 	var imgout bytes.Buffer
 	if SupportsWebP(headers) {
 		w.Header().Set("Content-Type", "image/webp")
 		options := webp.Options{
 			Lossless: false,
-			Quality:  float32(proxy.Qjpeg),
+                        Quality:  float32(proxy.Qjpeg),
 		}
 		if err = webp.Encode(&imgout, img, &options); err != nil {
 			log.Printf("WEBP Encode Err, Through, Len:%d", tee.Len())
@@ -85,8 +70,12 @@ func (t *Jpeg) Transcode(w *proxy.ResponseWriter, r *proxy.ResponseReader, heade
 		}
 	} else {
 		w.Header().Set("Content-Type", "image/jpeg")
-		encOptions := t.encOptions
-		if err = jpeg.Encode(&imgout, img, encOptions); err != nil {
+		jOptions := jpeg.EncoderOptions{
+                      Quality:       proxy.Qjpeg,
+                      OptimizeCoding: true,
+                      ProgressiveMode: true,
+                }
+		if err = jpeg.Encode(&imgout, img, &jOptions); err != nil {
 			log.Printf("JPEG Encode Err, Through, Len:%d", tee.Len())
                         io.Copy(w, &tee)
                 } else {
@@ -96,8 +85,8 @@ func (t *Jpeg) Transcode(w *proxy.ResponseWriter, r *proxy.ResponseReader, heade
                         } else {
                                 io.Copy(w, &imgout)
                         }
-		}
-		log.Printf("JPEG to JPEG")
+			log.Printf("WEBP to JPEG")
+                }
 	}
 	return nil
 }
